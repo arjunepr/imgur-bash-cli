@@ -1,0 +1,56 @@
+#!/bin/bash
+
+if [ -z "$1" ]
+then
+	echo "Usage: Provide a relative or absolute path to a file to be uploaded to imgur"
+fi
+
+IMGUR_CLIENT_ID=$( cat ~/.imgur_client_id )
+IMGUR_CLIENT_ID=${IMGUR_CLIENT_ID//[$'\t\r\n']}
+
+PRESENT_USER=$( whoami )
+ERROR_LOG_PATH="/home/$PRESENT_USER/.imgur_upload_error_log"
+SUCCESS_LOG_PATH="/home/$PRESENT_USER/.imgur_upload_success_log"
+
+case $1 in
+	/*) IMG_PATH=$1 ;;
+	*)  IMG_PATH="$( pwd )/$1" ;;
+esac
+
+# https://github.com/tremby/imgur.sh/blob/master/imgur.sh
+# curl -s -H "Authorization: Client-ID $IMGUR_CLIENT_ID" -H "Expect: " -F "image=@$IMG_PATH" https://api.imgur.com/3/image.json
+# curl -s -H "Authorization: Client-ID 2edc938a4290a5d" -H "Expect: " -F "image=@/home/arjun/Pictures/memes/xw9m7i3s5oz21.jpg" https://api.imgur.com/3/image.json
+JSON_RESPONSE=$(curl -s -H "Authorization: Client-ID $( cat ~/.imgur_client_id )" -H "Expect: " -F "image=@$IMG_PATH" https://api.imgur.com/3/image.json)
+SUCCESS=$( echo $JSON_RESPONSE | jq '.success' )
+LINK=""
+
+function seperate() {
+	echo -e "-----------------------------\n\n" 
+}
+
+function log_success() {
+	echo "Uploaded $IMG_PATH at $( date +%A )" >> $SUCCESS_LOG_PATH
+	echo "Received response: $JSON_RESPONSE" >> $SUCCESS_LOG_PATH
+	LINK="$( echo $JSON_RESPONSE | jq -r '.data.link' )"
+	echo "Link: $LINK" >> $SUCCESS_LOG_PATH
+	seperate >> $SUCCESS_LOG_PATH
+
+	echo "Access image at: $LINK"
+}
+
+
+function log_error() {
+	echo "Attempted to upload $IMG_PATH at $( date +%A )" >> $ERROR_LOG_PATH
+	echo "Received response: $JSON_RESPONSE" >> $ERROR_LOG_PATH
+	seperate >> $ERROR_LOG_PATH
+	
+	echo "Failure to upload picture $IMG_PATH"
+	echo "Check error log"
+}
+
+if [[ $SUCCESS -eq "true" ]];
+then
+	log_success
+else
+	log_error
+fi
